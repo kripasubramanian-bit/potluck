@@ -787,6 +787,7 @@ function switchTab(tab) {
   event.target.classList.add('active');
   if(tab==='guests') renderGuestList();
   if(tab==='photos') renderPhotoGrid();
+  if(tab==='rsvp') renderMenuBoard();
 }
 
 // == COUNTERS ==
@@ -965,7 +966,7 @@ function renderPhotoGrid() {
 }
 
 // == INIT ==
-loadData().then(()=>{ renderPhotoGrid(); updateGuestCount(); clearPotluckItems(); });
+loadData().then(()=>{ renderPhotoGrid(); updateGuestCount(); clearPotluckItems(); renderMenuBoard(); });
 </script>
 
 </body>
