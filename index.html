@@ -483,6 +483,17 @@
 <!-- RSVP TAB -->
 <div id="tab-rsvp" class="section">
   <div class="section-inner">
+
+    <!-- FIND & EDIT EXISTING RSVP -->
+    <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+      <div style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--sage);margin-bottom:10px;">✏️ Already RSVP'd? Find & edit your entry</div>
+      <div style="display:flex;gap:10px;">
+        <input type="text" id="search-name" placeholder="Type your name..." oninput="searchRSVP()" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-family:Inter,sans-serif;font-size:14px;outline:none;">
+        <button onclick="clearSearch()" style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:white;font-size:13px;color:#888;cursor:pointer;">Clear</button>
+      </div>
+      <div id="search-results" style="margin-top:10px;"></div>
+    </div>
+
     <div class="rsvp-layout">
       <div>
         <div class="form-card">
@@ -858,6 +869,33 @@ function toggleAllergy(el) {
 }
 
 // ==================== RSVP ====================
+// ==================== SEARCH & EDIT ====================
+function searchRSVP() {
+  const query = document.getElementById('search-name').value.trim().toLowerCase();
+  const container = document.getElementById('search-results');
+  if (!query || query.length < 2) { container.innerHTML = ''; return; }
+  const matches = rsvps.filter(r => (r.name || '').toLowerCase().includes(query));
+  if (!matches.length) {
+    container.innerHTML = '<div style="font-size:13px;color:#aaa;padding:8px 0;">No match found — check spelling or submit a new RSVP below.</div>';
+    return;
+  }
+  container.innerHTML = matches.map(r => {
+    const dishes = (r.potluckItems || []).filter(i => i.dish).map(i => i.dish).join(', ') || 'No dish added';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--cream);border-radius:8px;margin-bottom:6px;">
+      <div>
+        <div style="font-weight:600;font-size:14px;">${r.name}</div>
+        <div style="font-size:12px;color:#888;">${r.diet || ''} · 🍳 ${dishes}</div>
+      </div>
+      <button onclick="editRSVP(${r.id})" style="background:var(--mango);color:white;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Edit</button>
+    </div>`;
+  }).join('');
+}
+
+function clearSearch() {
+  document.getElementById('search-name').value = '';
+  document.getElementById('search-results').innerHTML = '';
+}
+
 function editRSVP(id) {
   const r = rsvps.find(x => x.id == id);
   if (!r) return;
@@ -889,6 +927,8 @@ function editRSVP(id) {
     potluckItemCount = 0;
     r.potluckItems.forEach(item => addPotluckItem(item));
   }
+  // clear search
+  clearSearch();
   document.getElementById('submit-btn').textContent = 'Update my RSVP →';
   document.getElementById('submit-btn').style.background = 'var(--sage)';
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1103,7 +1143,6 @@ loadData().then(() => {
   updateGuestCount();
   clearPotluckItems(); // initialise with one potluck row
 });
-</script>
 
 // ==================== HOUSE PHOTOS ====================
 function handleHousePhotoUpload(event) {
@@ -1288,177 +1327,6 @@ async function submitRSVP() {
   setTimeout(() => document.getElementById('success-msg').classList.remove('show'), 4000);
 }
 
-// ==================== MENU BOARD ====================
-const CAT_ORDER = [
-  'Starter / Snack',
-  'Main Course',
-  'Rice / Biryani',
-  'Roti / Bread',
-  'Salad / Raita',
-  'Dessert / Mithai',
-  'Drinks / Alcohol',
-  'Goes-with-drinks (chaat, crisps etc)',
-  'Extras (ice, plates, napkins)'
-];
-
-const CAT_EMOJI = {
-  'Starter / Snack': '🥗',
-  'Main Course': '🍛',
-  'Rice / Biryani': '🍚',
-  'Roti / Bread': '🫓',
-  'Salad / Raita': '🥙',
-  'Dessert / Mithai': '🍮',
-  'Drinks / Alcohol': '🍷',
-  'Goes-with-drinks (chaat, crisps etc)': '🍿',
-  'Extras (ice, plates, napkins)': '🧊'
-};
-
-function renderMenuBoard() {
-  const container = document.getElementById('menu-board-content');
-  const dishes = rsvps.filter(r => r.potluck);
-  if (!dishes.length) {
-    container.innerHTML = '<div class="menu-empty">No dishes claimed yet — be the first!</div>';
-    return;
-  }
-  const grouped = {};
-  dishes.forEach(r => {
-    const cat = r.potluck.category;
-    if (!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push(r);
-  });
-  let html = '';
-  CAT_ORDER.forEach(cat => {
-    if (!grouped[cat]) return;
-    html += `<div class="menu-category">
-      <div class="menu-cat-label">${CAT_EMOJI[cat] || '🍽'} ${cat}</div>`;
-    grouped[cat].forEach(r => {
-      html += `<div class="menu-item">
-        <span>${r.potluck.dish}${r.potluck.note ? ` <span style="color:#555;font-size:11px">(${r.potluck.note})</span>` : ''}</span>
-        <span class="menu-item-who">${r.name.split(' ')[0]}</span>
-      </div>`;
-    });
-    html += '</div>';
-  });
-  container.innerHTML = html;
-}
-
-function updateGuestCount() {
-  const total = rsvps.reduce((acc, r) => {
-    let n = 1;
-    if (r.partner) n++;
-    n += parseInt(r.kids) || 0;
-    return acc + n;
-  }, 0);
-  const el = document.getElementById('total-guests-count');
-  if (el) el.textContent = total;
-}
-
-// ==================== GUEST LIST ====================
-function renderGuestList() {
-  const container = document.getElementById('guest-list-container');
-  if (!rsvps.length) {
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:14px;">No RSVPs yet — spread the word! 🎉</div>';
-    return;
-  }
-
-  const totalPeople = rsvps.reduce((a, r) => a + 1 + (r.partner ? 1 : 0) + (parseInt(r.kids) || 0), 0);
-  const vegCount = rsvps.filter(r => r.diet === 'Vegetarian' || r.diet === 'Vegan').length;
-  const nonvegCount = rsvps.filter(r => r.diet === 'Non-Vegetarian').length;
-
-  let html = `
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;">
-      <div style="background:var(--mango);color:white;padding:12px 20px;border-radius:8px;text-align:center;flex:1;min-width:100px">
-        <div style="font-size:28px;font-weight:700;font-family:Playfair Display,serif">${totalPeople}</div>
-        <div style="font-size:11px;opacity:0.8;letter-spacing:1px;text-transform:uppercase">Total attending</div>
-      </div>
-      <div style="background:var(--sage);color:white;padding:12px 20px;border-radius:8px;text-align:center;flex:1;min-width:100px">
-        <div style="font-size:28px;font-weight:700;font-family:Playfair Display,serif">${vegCount}</div>
-        <div style="font-size:11px;opacity:0.8;letter-spacing:1px;text-transform:uppercase">Veg / Vegan</div>
-      </div>
-      <div style="background:var(--gold);color:white;padding:12px 20px;border-radius:8px;text-align:center;flex:1;min-width:100px">
-        <div style="font-size:28px;font-weight:700;font-family:Playfair Display,serif">${nonvegCount}</div>
-        <div style="font-size:11px;opacity:0.8;letter-spacing:1px;text-transform:uppercase">Non-Veg</div>
-      </div>
-    </div>`;
-
-  rsvps.forEach(r => {
-    const name = r.name || '';
-    const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    const allergies = Array.isArray(r.allergies) ? r.allergies : (r.allergies || '').split(', ').filter(Boolean);
-    const allergyStr = allergies.length ? allergies.join(', ') : 'None';
-    const kids = parseInt(r.kids) || 0;
-    const guestInfo = [
-      r.partner ? `+${r.partner}` : null,
-      kids > 0 ? `${kids} kid${kids > 1 ? 's' : ''}` : null
-    ].filter(Boolean).join(' · ');
-    const dish = r.dish || (r.potluck && r.potluck.dish) || '';
-    const category = r.category || (r.potluck && r.potluck.category) || '';
-
-    html += `<div class="guest-card">
-      <div class="guest-avatar">${initials}</div>
-      <div>
-        <div class="guest-name">${name}${guestInfo ? ` <span style="font-size:12px;color:#888;font-weight:400">· ${guestInfo}</span>` : ''}</div>
-        <div class="guest-meta">🥗 ${r.diet || '—'} &nbsp;·&nbsp; ⚠️ ${allergyStr}</div>
-      </div>
-      <div class="guest-bringing">
-        ${dish ? `🍳 ${dish}<br><span style="color:#aaa;font-weight:400">${category}</span>` : '<span style="color:#ccc">TBD</span>'}
-      </div>
-    </div>`;
-  });
-
-  container.innerHTML = html;
-}
-
-// ==================== PHOTOS ====================
-function handlePhotoUpload(event) {
-  const files = Array.from(event.target.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      // Store compressed base64
-      const img = new Image();
-      img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const MAX = 600;
-        let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = h * MAX / w; w = MAX; }
-          else { w = w * MAX / h; h = MAX; }
-        }
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        const data64 = canvas.toDataURL('image/jpeg', 0.7);
-        photos.push({ id: Date.now(), src: data64, name: file.name, uploader: 'Guest' });
-        await savePhotos();
-        renderPhotoGrid();
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function renderPhotoGrid() {
-  const grid = document.getElementById('photo-grid');
-  const loading = document.getElementById('photos-loading');
-  if (loading) loading.style.display = 'none';
-  if (!photos.length) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#aaa;font-size:14px">No photos yet — be the first to share a memory! 📸</div>';
-    return;
-  }
-  grid.innerHTML = photos.map(p => `
-    <div class="photo-cell">
-      <img src="${p.src}" alt="${p.name}" loading="lazy">
-      <div class="photo-name">${p.name}</div>
-    </div>
-  `).join('');
-}
-
-// ==================== INIT ====================
-loadData().then(() => {
-  renderPhotoGrid();
-  updateGuestCount();
-});
 </script>
 
 </body>
