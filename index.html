@@ -687,32 +687,36 @@ function clearPotluckItems() {
 
 // == GOOGLE SHEETS STORAGE ==
 async function loadData() {
-  return new Promise((resolve) => {
-    const callbackName = 'jsonp_cb_' + Date.now();
-    const script = document.createElement('script');
-    window[callbackName] = function(data) {
-      delete window[callbackName];
-      document.body.removeChild(script);
-      try {
-        const map = {};
-        (data||[]).forEach(r => {
-          if (!r.id) return;
-          if (!map[r.id]) {
-            map[r.id] = {id:r.id,name:r.name,phone:r.phone,partner:r.partner,kids:r.kids,diet:r.diet,
-              allergies:r.allergies?r.allergies.split(', ').filter(Boolean):[],timestamp:r.timestamp,potluckItems:[]};
-          }
-          if (r.dish) map[r.id].potluckItems.push({category:r.category,dish:r.dish,note:r.note});
-        });
-        rsvps = Object.values(map);
-      } catch(e) { rsvps = []; }
-      photos = []; housePhotos = [];
-      renderMenuBoard(); updateGuestCount(); renderHousePhotos();
-      resolve();
-    };
-    script.src = SHEET_URL + '?callback=' + callbackName;
-    script.onerror = () => { rsvps = []; resolve(); };
-    document.body.appendChild(script);
-  });
+  try {
+    const SHEET_ID = '1uShkY3-D_-XEEjac2IVXPadbcKnomdez1ykEzjnyu6Y';
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
+    const res = await fetch(url);
+    const csv = await res.text();
+    const rows = csv.trim().split('\n').map(row => row.split(',').map(cell => cell.replace(/^"|"$/g,'').trim()));
+    if (rows.length < 2) { rsvps = []; renderMenuBoard(); updateGuestCount(); renderHousePhotos(); return; }
+    const headers = rows[0];
+    const map = {};
+    rows.slice(1).forEach(row => {
+      const r = {};
+      headers.forEach((h, i) => r[h] = row[i] || '');
+      if (!r.id) return;
+      if (!map[r.id]) {
+        map[r.id] = {
+          id: r.id, name: r.name, phone: r.phone, partner: r.partner,
+          kids: r.kids, diet: r.diet,
+          allergies: r.allergies ? r.allergies.split(', ').filter(Boolean) : [],
+          timestamp: r.timestamp, potluckItems: []
+        };
+      }
+      if (r.dish) map[r.id].potluckItems.push({ category: r.category, dish: r.dish, note: r.note });
+    });
+    rsvps = Object.values(map);
+  } catch(e) {
+    console.error('Load error:', e);
+    rsvps = [];
+  }
+  photos = []; housePhotos = [];
+  renderMenuBoard(); updateGuestCount(); renderHousePhotos();
 }
 
 async function saveRSVP(person, items) {
