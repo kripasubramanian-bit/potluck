@@ -602,7 +602,7 @@
 </div>
 
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyAoxKnoVlKfHzxz55Ar5Vju-OvH8avnANKrMtaAkz19D7RXHoIgqsvHUncJZCTbX66-w/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzoic3hsvy8SnINacEFEsDpX-Jjv3QXoUnIvtlCJeCqrp_YpIekv4KSGWAcvrCuqhPcyQ/exec';
 
 let kidsCount = 0;
 let selectedAllergies = [];
@@ -710,16 +710,17 @@ async function loadData() {
       const vals = parseCSVRow(line);
       const r = {};
       headers.forEach((h, i) => r[h] = vals[i] || '');
-      if (!r.id) return;
-      if (!map[r.id]) {
-        map[r.id] = {
-          id: r.id, name: r.name, phone: r.phone, partner: r.partner,
+      const id = String(r.id).trim();
+      if (!id) return;
+      if (!map[id]) {
+        map[id] = {
+          id: id, name: r.name, phone: r.phone, partner: r.partner,
           kids: r.kids, diet: r.diet,
           allergies: r.allergies ? r.allergies.split(', ').filter(Boolean) : [],
           timestamp: r.timestamp, potluckItems: []
         };
       }
-      if (r.dish) map[r.id].potluckItems.push({ category: r.category, dish: r.dish, note: r.note });
+      if (r.dish) map[id].potluckItems.push({ category: r.category, dish: r.dish, note: r.note });
     });
     rsvps = Object.values(map);
   } catch(e) {
@@ -732,15 +733,19 @@ async function loadData() {
 
 async function saveRSVP(person, items) {
   const rows = items.length > 0 ? items : [{category:'',dish:'',note:''}];
-  for (const item of rows) {
-    await fetch(SHEET_URL, {
-      method:'POST', mode:'no-cors',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({id:person.id,name:person.name,phone:person.phone,partner:person.partner,
-        kids:person.kids,diet:person.diet,allergies:person.allergies.join(', '),
-        dish:item.dish,category:item.category,note:item.note,timestamp:person.timestamp,action:person.action||'add'})
-    });
-  }
+  const payload = rows.map(item => ({
+    id: String(person.id),
+    name: person.name, phone: person.phone, partner: person.partner,
+    kids: person.kids, diet: person.diet,
+    allergies: person.allergies.join(', '),
+    dish: item.dish, category: item.category, note: item.note,
+    timestamp: person.timestamp, action: person.action||'add'
+  }));
+  await fetch(SHEET_URL, {
+    method: 'POST', mode: 'no-cors',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
 }
 
 async function savePhotos() {}
