@@ -851,23 +851,30 @@ async function submitRSVP() {
   if(!dietEl){alert('Please select a dietary preference.');return;}
   const btn = document.getElementById('submit-btn');
   btn.disabled=true; btn.textContent='Saving...';
-  const items = getPotluckItems();
-  const id = editingId||Date.now();
-  const person = {id,name,phone,partner,kids:kidsCount,diet:dietEl.value,allergies:[...selectedAllergies],timestamp:new Date().toISOString(),action:editingId?'edit':'add'};
-  if(editingId) { const idx=rsvps.findIndex(r=>r.id==editingId); if(idx>-1) rsvps[idx]={...person,potluckItems:items}; editingId=null; }
-  else rsvps.push({...person,potluckItems:items});
-  await saveRSVP(person,items);
-  renderMenuBoard(); updateGuestCount();
-  btn.textContent='Confirm my RSVP →'; btn.style.background='var(--mango)'; btn.disabled=false;
-  document.getElementById('success-msg').classList.add('show');
-  document.getElementById('rsvp-name').value=''; document.getElementById('rsvp-phone').value='';
-  document.getElementById('rsvp-partner').value=''; kidsCount=0;
-  document.getElementById('kids-count').textContent='0';
-  document.querySelectorAll('input[name="diet"]').forEach(r=>r.checked=false);
-  document.querySelectorAll('.allergy-tag').forEach(t=>t.classList.remove('selected'));
-  selectedAllergies=[];
-  clearPotluckItems();
-  setTimeout(()=>document.getElementById('success-msg').classList.remove('show'),4000);
+
+  try {
+    const items = getPotluckItems();
+    const id = editingId||Date.now();
+    const person = {id,name,phone,partner,kids:kidsCount,diet:dietEl.value,allergies:[...selectedAllergies],timestamp:new Date().toISOString(),action:editingId?'edit':'add'};
+    if(editingId) { const idx=rsvps.findIndex(r=>r.id==editingId); if(idx>-1) rsvps[idx]={...person,potluckItems:items}; editingId=null; }
+    else rsvps.push({...person,potluckItems:items});
+    await saveRSVP(person,items);
+    renderMenuBoard(); updateGuestCount();
+    document.getElementById('success-msg').classList.add('show');
+    document.getElementById('rsvp-name').value=''; document.getElementById('rsvp-phone').value='';
+    document.getElementById('rsvp-partner').value=''; kidsCount=0;
+    document.getElementById('kids-count').textContent='0';
+    document.querySelectorAll('input[name="diet"]').forEach(r=>r.checked=false);
+    document.querySelectorAll('.allergy-tag').forEach(t=>t.classList.remove('selected'));
+    selectedAllergies=[];
+    clearPotluckItems();
+    setTimeout(()=>document.getElementById('success-msg').classList.remove('show'),4000);
+  } catch(err) {
+    console.error('Submit error:', err);
+    alert('Something went wrong saving your RSVP. Please try again.');
+  } finally {
+    btn.textContent='Confirm my RSVP →'; btn.style.background='var(--mango)'; btn.disabled=false;
+  }
 }
 
 // == MENU BOARD ==
