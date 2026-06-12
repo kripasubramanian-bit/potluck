@@ -684,13 +684,32 @@ async function loadData() {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1`;
     const res = await fetch(url);
     const csv = await res.text();
-    const rows = csv.trim().split('\n').map(row => row.split(',').map(cell => cell.replace(/^"|"$/g,'').trim()));
-    if (rows.length < 2) { rsvps = []; renderMenuBoard(); updateGuestCount(); renderHousePhotos(); return; }
-    const headers = rows[0];
+
+    // Proper CSV parser that handles quoted fields
+    function parseCSVRow(row) {
+      const result = [];
+      let inQuote = false, cell = '';
+      for (let i = 0; i < row.length; i++) {
+        const c = row[i];
+        if (c === '"') {
+          if (inQuote && row[i+1] === '"') { cell += '"'; i++; }
+          else inQuote = !inQuote;
+        } else if (c === ',' && !inQuote) {
+          result.push(cell.trim()); cell = '';
+        } else { cell += c; }
+      }
+      result.push(cell.trim());
+      return result;
+    }
+
+    const lines = csv.trim().split('\n');
+    const headers = parseCSVRow(lines[0]);
     const map = {};
-    rows.slice(1).forEach(row => {
+    lines.slice(1).forEach(line => {
+      if (!line.trim()) return;
+      const vals = parseCSVRow(line);
       const r = {};
-      headers.forEach((h, i) => r[h] = row[i] || '');
+      headers.forEach((h, i) => r[h] = vals[i] || '');
       if (!r.id) return;
       if (!map[r.id]) {
         map[r.id] = {
