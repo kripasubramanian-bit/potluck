@@ -380,7 +380,7 @@
   <div class="hero-content">
     <div class="hero-eyebrow">You are warmly invited</div>
     <h1>A Summer <em>Potluck</em><br>with Family</h1>
-    <div class="hero-date">Friday, 20 June 2025</div>
+    <div class="hero-date">Saturday, 20 June 2026</div>
     <div class="hero-detail">🕛 12:00 Noon onwards &nbsp;·&nbsp; 📍 Ruislip, London</div>
     <div class="hero-badge">🍽 Bring a dish · Bring yourself · Bring everyone</div>
     <div style="margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
@@ -538,34 +538,9 @@
           </div>
 
           <div class="form-group">
-            <label>What are you bringing? 🍳</label>
-            <div class="potluck-section">
-              <div class="form-row">
-                <div class="form-group" style="margin-bottom:0">
-                  <label>Category</label>
-                  <select id="potluck-cat">
-                    <option value="">-- choose --</option>
-                    <option>Starter / Snack</option>
-                    <option>Main Course</option>
-                    <option>Rice / Biryani</option>
-                    <option>Roti / Bread</option>
-                    <option>Salad / Raita</option>
-                    <option>Dessert / Mithai</option>
-                    <option>Drinks / Alcohol</option>
-                    <option>Extras (ice, plates, napkins)</option>
-                    <option>Goes-with-drinks (chaat, crisps etc)</option>
-                  </select>
-                </div>
-                <div class="form-group" style="margin-bottom:0">
-                  <label>Dish name</label>
-                  <input type="text" id="potluck-dish" placeholder="e.g. Dal Makhani">
-                </div>
-              </div>
-              <div style="margin-top:12px">
-                <label style="font-size:12px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#777">Any note? (serves how many, spice level etc)</label>
-                <input type="text" id="potluck-note" placeholder="Optional" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-family:Inter,sans-serif;font-size:13px;margin-top:6px;background:white;outline:none;">
-              </div>
-            </div>
+            <label>What are you bringing? 🍳 <span style="font-weight:400;color:#aaa;font-size:11px">Add up to 3 items</span></label>
+            <div id="potluck-items-list"></div>
+            <button type="button" onclick="addPotluckItem()" id="add-item-btn" style="margin-top:10px;background:none;border:1px dashed var(--mango);color:var(--mango);border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">+ Add another item</button>
           </div>
 
           <button class="submit-btn" id="submit-btn" onclick="submitRSVP()">Confirm my RSVP →</button>
@@ -624,76 +599,511 @@
 </div>
 
 <script>
-// ==================== JSONBIN CONFIG ====================
-const BIN_ID = '6a2c11d7f5f4af5e29e6a61f';
-const API_KEY = '$2a$10$M.H1a9zKE212FBqbZVJEnuiRoeqAVZk.wQmhrJ1tkcd1anI60Bo6q';
-const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
-
-const HEADERS_READ = {
-  'X-Master-Key': API_KEY,
-  'X-Bin-Meta': 'false'
-};
-const HEADERS_WRITE = {
-  'Content-Type': 'application/json',
-  'X-Master-Key': API_KEY
-};
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyAoxKnoVlKfHzxz55Ar5Vju-OvH8avnANKrMtaAkz19D7RXHoIgqsvHUncJZCTbX66-w/exec';
 
 let kidsCount = 0;
 let selectedAllergies = [];
 let rsvps = [];
 let photos = [];
 let housePhotos = [];
+let editingId = null;
+let potluckItemCount = 0;
 
-// ==================== JSONBIN STORAGE ====================
-async function loadData() {
-  try {
-    const res = await fetch(BIN_URL + '/latest', {
-      headers: HEADERS_READ
-    });
-    if (!res.ok) throw new Error('Fetch failed: ' + res.status);
-    const json = await res.json();
-    const data = json;
-    rsvps = data.rsvps || [];
-    photos = data.photos || [];
-    housePhotos = data.housePhotos || [];
-  } catch(e) {
-    console.error('Load error:', e);
-    // retry once after 2 seconds
-    setTimeout(async () => {
-      try {
-        const res = await fetch(BIN_URL + '/latest', {
-          headers: HEADERS_READ
-        });
-        const json = await res.json();
-        const data = json;
-        rsvps = data.rsvps || [];
-        photos = data.photos || [];
-        housePhotos = data.housePhotos || [];
-        renderMenuBoard();
-        updateGuestCount();
-        renderHousePhotos();
-        renderGuestList();
-      } catch(e2) { console.error('Retry failed', e2); }
-    }, 2000);
+const CAT_OPTIONS = ['Starter / Snack','Main Course','Rice / Biryani','Roti / Bread','Salad / Raita','Dessert / Mithai','Drinks / Alcohol','Goes-with-drinks (chaat, crisps etc)','Extras (ice, plates, napkins)'];
+
+// ==================== POTLUCK MULTI-ITEM ====================
+function addPotluckItem(prefill) {
+  const list = document.getElementById('potluck-items-list');
+  if (list.children.length >= 3) {
+    document.getElementById('add-item-btn').style.display = 'none';
+    return;
   }
-  renderMenuBoard();
-  updateGuestCount();
+  const idx = potluckItemCount++;
+  const div = document.createElement('div');
+  div.className = 'potluck-section';
+  div.style.marginBottom = '10px';
+  div.id = `potluck-item-${idx}`;
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:12px;font-weight:600;color:var(--sage);text-transform:uppercase;letter-spacing:0.5px;">Item ${list.children.length + 1}</span>
+      ${list.children.length > 0 ? `<button type="button" onclick="removePotluckItem('potluck-item-${idx}')" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:18px;line-height:1;">×</button>` : ''}
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Category</label>
+        <select id="pcat-${idx}" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-family:Inter,sans-serif;font-size:14px;background:var(--cream);outline:none;">
+          <option value="">-- choose --</option>
+          ${CAT_OPTIONS.map(c => `<option ${prefill && prefill.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Dish name</label>
+        <input type="text" id="pdish-${idx}" placeholder="e.g. Dal Makhani" value="${prefill ? prefill.dish : ''}" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-family:Inter,sans-serif;font-size:14px;background:var(--cream);outline:none;">
+      </div>
+    </div>
+    <input type="text" id="pnote-${idx}" placeholder="Optional note (serves how many, spice level…)" value="${prefill ? prefill.note : ''}" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-family:Inter,sans-serif;font-size:13px;margin-top:4px;background:white;outline:none;">
+  `;
+  list.appendChild(div);
+  // show/hide add button
+  document.getElementById('add-item-btn').style.display = list.children.length >= 3 ? 'none' : 'block';
+}
+
+function removePotluckItem(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+  document.getElementById('add-item-btn').style.display = 'block';
+  // renumber labels
+  Array.from(document.getElementById('potluck-items-list').children).forEach((div, i) => {
+    const label = div.querySelector('span');
+    if (label) label.textContent = `Item ${i + 1}`;
+  });
+}
+
+function getPotluckItems() {
+  const items = [];
+  const list = document.getElementById('potluck-items-list');
+  Array.from(list.children).forEach(div => {
+    const id = div.id.replace('potluck-item-', '');
+    const cat = document.getElementById(`pcat-${id}`)?.value;
+    const dish = document.getElementById(`pdish-${id}`)?.value.trim();
+    const note = document.getElementById(`pnote-${id}`)?.value.trim();
+    if (dish) items.push({ category: cat || '', dish, note: note || '' });
+  });
+  return items;
+}
+
+function clearPotluckItems() {
+  document.getElementById('potluck-items-list').innerHTML = '';
+  potluckItemCount = 0;
+  document.getElementById('add-item-btn').style.display = 'block';
+  addPotluckItem(); // always start with one
+}
+
+// ==================== GOOGLE SHEETS STORAGE ====================
+async function loadData() {
+  return new Promise((resolve) => {
+    const callbackName = 'jsonp_cb_' + Date.now();
+    const script = document.createElement('script');
+    window[callbackName] = function(data) {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      try {
+        const map = {};
+        (data || []).forEach(r => {
+          if (!r.id) return;
+          if (!map[r.id]) {
+            map[r.id] = {
+              id: r.id, name: r.name, phone: r.phone, partner: r.partner,
+              kids: r.kids, diet: r.diet,
+              allergies: r.allergies ? r.allergies.split(', ').filter(Boolean) : [],
+              timestamp: r.timestamp, potluckItems: []
+            };
+          }
+          if (r.dish) map[r.id].potluckItems.push({ category: r.category, dish: r.dish, note: r.note });
+        });
+        rsvps = Object.values(map);
+      } catch(e) { rsvps = []; }
+      photos = []; housePhotos = [];
+      renderMenuBoard();
+      updateGuestCount();
+      renderHousePhotos();
+      resolve();
+    };
+    script.src = SHEET_URL + '?callback=' + callbackName;
+    script.onerror = () => { rsvps = []; resolve(); };
+    document.body.appendChild(script);
+  });
+}
+
+async function saveRSVP(person, items) {
+  // Send one row per dish (or one row if no dish)
+  const rows = items.length > 0 ? items : [{ category: '', dish: '', note: '' }];
+  for (const item of rows) {
+    await fetch(SHEET_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: person.id,
+        name: person.name,
+        phone: person.phone,
+        partner: person.partner,
+        kids: person.kids,
+        diet: person.diet,
+        allergies: person.allergies.join(', '),
+        dish: item.dish,
+        category: item.category,
+        note: item.note,
+        timestamp: person.timestamp,
+        action: person.action || 'add'
+      })
+    });
+  }
+}
+
+async function savePhotos() {}
+async function saveHousePhotos() {}
+
+// ==================== HOUSE PHOTOS ====================
+function handleHousePhotoUpload(event) {
+  const files = Array.from(event.target.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const MAX = 900;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const data64 = canvas.toDataURL('image/jpeg', 0.8);
+        housePhotos.push({ id: Date.now(), src: data64, label: file.name });
+        renderHousePhotos();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderHousePhotos() {
+  const grid = document.getElementById('house-photos-grid');
+  const display = document.getElementById('house-photos-display');
+  if (!grid || !display) return;
+  if (!housePhotos.length) { display.style.display = 'none'; return; }
+  display.style.display = 'block';
+  grid.innerHTML = housePhotos.map((p, i) => `
+    <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border);">
+      <img src="${p.src}" style="width:100%;display:block;aspect-ratio:4/3;object-fit:cover;" alt="House photo">
+      <div style="position:absolute;top:8px;right:8px;">
+        <button onclick="removeHousePhoto(${i})" style="background:rgba(0,0,0,0.5);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:1;">×</button>
+      </div>
+      <div style="padding:8px 10px;font-size:12px;color:#666;background:white;">📷 ${i === 0 ? 'Front of house' : i === 1 ? 'Back / garden' : 'Photo ' + (i+1)}</div>
+    </div>
+  `).join('');
+}
+
+async function removeHousePhoto(index) {
+  housePhotos.splice(index, 1);
   renderHousePhotos();
 }
 
-async function saveAll() {
-  try {
-    await fetch(BIN_URL, {
-      method: 'PUT',
-      headers: HEADERS_WRITE,
-      body: JSON.stringify({ rsvps, photos, housePhotos })
-    });
-  } catch(e) { console.error('Save failed', e); }
+async function clearHousePhotos() {
+  if (!confirm('Remove all house photos?')) return;
+  housePhotos = [];
+  renderHousePhotos();
 }
 
-async function saveRSVPs() { await saveAll(); }
-async function savePhotos() { await saveAll(); }
-async function saveHousePhotos() { await saveAll(); }
+// ==================== WHATSAPP SHARE ====================
+function copyWhatsAppInvite() {
+  const text = `🎉 *You're invited to a Summer Potluck!*
+
+📅 *Saturday, 20 June 2026*
+🕛 *12:00 Noon onwards*
+📍 *26 Hill Rise, Ruislip, HA4 7JL*
+
+It's a potluck — bring a dish to share! 🍛🥗🍮
+
+🚇 *Getting here:*
+• *West Ruislip* (Central line) — 6–8 min walk. Exit, turn right, walk to the fuel station, cross the road, walk straight down the path to Hill Rise. Closest station — use this one!
+• *Ruislip* (Met/Piccadilly) — ~15 min walk. Exit, turn left, walk to traffic lights, cross, walk along High Street, turn left just after Home Flair, walk straight to Hill Rise.
+
+🗺 Google Maps: https://maps.google.com/?q=26+Hill+Rise,+Ruislip,+HA4+7JL
+
+Please RSVP and let us know:
+✅ Who's coming (plus partner / kids)
+🥗 Veg or non-veg, any allergies
+🍳 What dish(es) you'll bring
+
+See you there! 🙏`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('[onclick="copyWhatsAppInvite()"]');
+    const conf = document.getElementById('copy-confirm');
+    if (btn) btn.style.display = 'none';
+    if (conf) conf.style.display = 'block';
+    setTimeout(() => {
+      if (btn) btn.style.display = 'block';
+      if (conf) conf.style.display = 'none';
+    }, 3000);
+  }).catch(() => alert('Could not copy automatically.'));
+}
+
+// ==================== TABS ====================
+function switchTab(tab) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+  if (tab === 'guests') renderGuestList();
+  if (tab === 'photos') renderPhotoGrid();
+}
+
+// ==================== COUNTERS ====================
+function changeCount(delta) {
+  kidsCount = Math.max(0, kidsCount + delta);
+  document.getElementById('kids-count').textContent = kidsCount;
+}
+
+function toggleAllergy(el) {
+  el.classList.toggle('selected');
+  const val = el.textContent.trim();
+  if (el.classList.contains('selected')) selectedAllergies.push(val);
+  else selectedAllergies = selectedAllergies.filter(a => a !== val);
+}
+
+// ==================== RSVP ====================
+function editRSVP(id) {
+  const r = rsvps.find(x => x.id == id);
+  if (!r) return;
+  editingId = id;
+  // switch to RSVP tab
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-rsvp').classList.add('active');
+  document.querySelector('[onclick="switchTab(\'rsvp\')"]').classList.add('active');
+  // fill form
+  document.getElementById('rsvp-name').value = r.name || '';
+  document.getElementById('rsvp-phone').value = r.phone || '';
+  document.getElementById('rsvp-partner').value = r.partner || '';
+  kidsCount = parseInt(r.kids) || 0;
+  document.getElementById('kids-count').textContent = kidsCount;
+  document.querySelectorAll('input[name="diet"]').forEach(radio => {
+    radio.checked = radio.value === r.diet;
+  });
+  selectedAllergies = [...(r.allergies || [])];
+  document.querySelectorAll('.allergy-tag').forEach(tag => {
+    tag.classList.toggle('selected', selectedAllergies.includes(tag.textContent.trim()));
+  });
+  // fill potluck items
+  clearPotluckItems();
+  if (r.potluckItems && r.potluckItems.length > 0) {
+    // first item fills the default row
+    const list = document.getElementById('potluck-items-list');
+    list.innerHTML = '';
+    potluckItemCount = 0;
+    r.potluckItems.forEach(item => addPotluckItem(item));
+  }
+  document.getElementById('submit-btn').textContent = 'Update my RSVP →';
+  document.getElementById('submit-btn').style.background = 'var(--sage)';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function submitRSVP() {
+  const name = document.getElementById('rsvp-name').value.trim();
+  const phone = document.getElementById('rsvp-phone').value.trim();
+  const partner = document.getElementById('rsvp-partner').value.trim();
+  const dietEl = document.querySelector('input[name="diet"]:checked');
+
+  if (!name) { alert('Please enter your name!'); return; }
+  if (!dietEl) { alert('Please select a dietary preference.'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const items = getPotluckItems();
+  const id = editingId || Date.now();
+
+  const person = {
+    id, name, phone, partner,
+    kids: kidsCount,
+    diet: dietEl.value,
+    allergies: [...selectedAllergies],
+    timestamp: new Date().toISOString(),
+    action: editingId ? 'edit' : 'add'
+  };
+
+  // Update local state
+  if (editingId) {
+    const idx = rsvps.findIndex(r => r.id == editingId);
+    if (idx > -1) rsvps[idx] = { ...person, potluckItems: items };
+    editingId = null;
+  } else {
+    rsvps.push({ ...person, potluckItems: items });
+  }
+
+  await saveRSVP(person, items);
+  renderMenuBoard();
+  updateGuestCount();
+
+  btn.textContent = 'Confirm my RSVP →';
+  btn.style.background = 'var(--mango)';
+  btn.disabled = false;
+  document.getElementById('success-msg').classList.add('show');
+
+  // reset
+  document.getElementById('rsvp-name').value = '';
+  document.getElementById('rsvp-phone').value = '';
+  document.getElementById('rsvp-partner').value = '';
+  kidsCount = 0;
+  document.getElementById('kids-count').textContent = '0';
+  document.querySelectorAll('input[name="diet"]').forEach(r => r.checked = false);
+  document.querySelectorAll('.allergy-tag').forEach(t => t.classList.remove('selected'));
+  selectedAllergies = [];
+  clearPotluckItems();
+  setTimeout(() => document.getElementById('success-msg').classList.remove('show'), 4000);
+}
+
+// ==================== MENU BOARD ====================
+const CAT_ORDER = [
+  'Starter / Snack','Main Course','Rice / Biryani','Roti / Bread',
+  'Salad / Raita','Dessert / Mithai','Drinks / Alcohol',
+  'Goes-with-drinks (chaat, crisps etc)','Extras (ice, plates, napkins)'
+];
+const CAT_EMOJI = {
+  'Starter / Snack':'🥗','Main Course':'🍛','Rice / Biryani':'🍚',
+  'Roti / Bread':'🫓','Salad / Raita':'🥙','Dessert / Mithai':'🍮',
+  'Drinks / Alcohol':'🍷','Goes-with-drinks (chaat, crisps etc)':'🍿',
+  'Extras (ice, plates, napkins)':'🧊'
+};
+
+function renderMenuBoard() {
+  const container = document.getElementById('menu-board-content');
+  const grouped = {};
+  rsvps.forEach(r => {
+    (r.potluckItems || []).forEach(item => {
+      if (!item.dish) return;
+      const cat = item.category || 'Other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push({ name: r.name, dish: item.dish, note: item.note });
+    });
+  });
+  if (!Object.keys(grouped).length) {
+    container.innerHTML = '<div class="menu-empty">No dishes claimed yet — be the first!</div>';
+    return;
+  }
+  let html = '';
+  CAT_ORDER.forEach(cat => {
+    if (!grouped[cat]) return;
+    html += `<div class="menu-category"><div class="menu-cat-label">${CAT_EMOJI[cat] || '🍽'} ${cat}</div>`;
+    grouped[cat].forEach(r => {
+      html += `<div class="menu-item">
+        <span>${r.dish}${r.note ? ` <span style="color:#555;font-size:11px">(${r.note})</span>` : ''}</span>
+        <span class="menu-item-who">${(r.name||'').split(' ')[0]}</span>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function updateGuestCount() {
+  const total = rsvps.reduce((acc, r) => {
+    let n = 1;
+    if (r.partner) n++;
+    n += parseInt(r.kids) || 0;
+    return acc + n;
+  }, 0);
+  const el = document.getElementById('total-guests-count');
+  if (el) el.textContent = total;
+}
+
+// ==================== GUEST LIST ====================
+function renderGuestList() {
+  const container = document.getElementById('guest-list-container');
+  if (!rsvps.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:14px;">No RSVPs yet — spread the word! 🎉</div>';
+    return;
+  }
+  const totalPeople = rsvps.reduce((a, r) => a + 1 + (r.partner ? 1 : 0) + (parseInt(r.kids) || 0), 0);
+  const vegCount = rsvps.filter(r => r.diet === 'Vegetarian' || r.diet === 'Vegan').length;
+  const nonvegCount = rsvps.filter(r => r.diet === 'Non-Vegetarian').length;
+
+  let html = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;">
+      <div style="background:var(--mango);color:white;padding:12px 20px;border-radius:8px;text-align:center;flex:1;min-width:100px">
+        <div style="font-size:28px;font-weight:700;font-family:'Playfair Display',serif">${totalPeople}</div>
+        <div style="font-size:11px;opacity:0.8;letter-spacing:1px;text-transform:uppercase">Total attending</div>
+      </div>
+      <div style="background:var(--sage);color:white;padding:12px 20px;border-radius:8px;text-align:center;flex:1;min-width:100px">
+        <div style="font-size:28px;font-weight:700;font-family:'Playfair Display',serif">${vegCount}</div>
+        <div style="font-size:11px;opacity:0.8;letter-spacing:1px;text-transform:uppercase">Veg / Vegan</div>
+      </div>
+      <div style="background:var(--gold);color:white;padding:12px 20px;border-radius:8px;text-align:center;flex:1;min-width:100px">
+        <div style="font-size:28px;font-weight:700;font-family:'Playfair Display',serif">${nonvegCount}</div>
+        <div style="font-size:11px;opacity:0.8;letter-spacing:1px;text-transform:uppercase">Non-Veg</div>
+      </div>
+    </div>`;
+
+  rsvps.forEach(r => {
+    const name = r.name || '';
+    const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const allergies = Array.isArray(r.allergies) ? r.allergies : (r.allergies || '').split(', ').filter(Boolean);
+    const allergyStr = allergies.length ? allergies.join(', ') : 'None';
+    const kids = parseInt(r.kids) || 0;
+    const guestInfo = [r.partner ? `+${r.partner}` : null, kids > 0 ? `${kids} kid${kids > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ');
+    const dishes = (r.potluckItems || []).filter(i => i.dish);
+
+    html += `<div class="guest-card">
+      <div class="guest-avatar">${initials}</div>
+      <div>
+        <div class="guest-name">${name}${guestInfo ? ` <span style="font-size:12px;color:#888;font-weight:400">· ${guestInfo}</span>` : ''}</div>
+        <div class="guest-meta">🥗 ${r.diet || '—'} &nbsp;·&nbsp; ⚠️ ${allergyStr}</div>
+        ${dishes.length ? `<div style="margin-top:4px;font-size:12px;color:var(--sage);">🍳 ${dishes.map(d => d.dish).join(' · ')}</div>` : ''}
+      </div>
+      <button onclick="editRSVP(${r.id})" style="background:none;border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;color:#888;cursor:pointer;white-space:nowrap;flex-shrink:0;">✏️ Edit</button>
+    </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+// ==================== PHOTOS ====================
+function handlePhotoUpload(event) {
+  const files = Array.from(event.target.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const MAX = 600;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const data64 = canvas.toDataURL('image/jpeg', 0.7);
+        photos.push({ id: Date.now(), src: data64, name: file.name });
+        renderPhotoGrid();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPhotoGrid() {
+  const grid = document.getElementById('photo-grid');
+  const loading = document.getElementById('photos-loading');
+  if (loading) loading.style.display = 'none';
+  if (!photos.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#aaa;font-size:14px">No photos yet — be the first to share a memory! 📸</div>';
+    return;
+  }
+  grid.innerHTML = photos.map(p => `
+    <div class="photo-cell">
+      <img src="${p.src}" alt="${p.name}" loading="lazy">
+      <div class="photo-name">${p.name}</div>
+    </div>
+  `).join('');
+}
+
+// ==================== INIT ====================
+loadData().then(() => {
+  renderPhotoGrid();
+  updateGuestCount();
+  clearPotluckItems(); // initialise with one potluck row
+});
+</script>
 
 // ==================== HOUSE PHOTOS ====================
 function handleHousePhotoUpload(event) {
@@ -760,7 +1170,7 @@ async function clearHousePhotos() {
 function copyWhatsAppInvite() {
   const text = `🎉 *You're invited to a Summer Potluck!*
 
-📅 *Friday, 20 June 2025*
+📅 *Saturday, 20 June 2026*
 🕛 *12:00 Noon onwards*
 📍 *26 Hill Rise, Ruislip, HA4 7JL*
 
@@ -841,13 +1251,21 @@ async function submitRSVP() {
     name, phone, partner,
     kids: kidsCount,
     diet: dietEl.value,
-    allergies: [...selectedAllergies],
-    potluck: catEl && dish ? { category: catEl, dish, note } : null,
+    allergies: selectedAllergies.join(', '),
+    dish: dish,
+    category: catEl,
+    note: note,
     timestamp: new Date().toISOString()
   };
 
-  rsvps.push(entry);
-  await saveRSVPs();
+  // Add to local state for immediate UI update
+  rsvps.push({
+    ...entry,
+    allergies: [...selectedAllergies],
+    potluck: catEl && dish ? { category: catEl, dish, note } : null
+  });
+
+  await saveRSVPs(entry);
   renderMenuBoard();
   updateGuestCount();
 
@@ -928,7 +1346,7 @@ function updateGuestCount() {
   const total = rsvps.reduce((acc, r) => {
     let n = 1;
     if (r.partner) n++;
-    n += r.kids;
+    n += parseInt(r.kids) || 0;
     return acc + n;
   }, 0);
   const el = document.getElementById('total-guests-count');
@@ -943,8 +1361,7 @@ function renderGuestList() {
     return;
   }
 
-  // Summary bar
-  const totalPeople = rsvps.reduce((a, r) => a + 1 + (r.partner ? 1 : 0) + r.kids, 0);
+  const totalPeople = rsvps.reduce((a, r) => a + 1 + (r.partner ? 1 : 0) + (parseInt(r.kids) || 0), 0);
   const vegCount = rsvps.filter(r => r.diet === 'Vegetarian' || r.diet === 'Vegan').length;
   const nonvegCount = rsvps.filter(r => r.diet === 'Non-Vegetarian').length;
 
@@ -965,21 +1382,26 @@ function renderGuestList() {
     </div>`;
 
   rsvps.forEach(r => {
-    const initials = r.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    const allergyStr = r.allergies.length ? r.allergies.join(', ') : 'None';
+    const name = r.name || '';
+    const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const allergies = Array.isArray(r.allergies) ? r.allergies : (r.allergies || '').split(', ').filter(Boolean);
+    const allergyStr = allergies.length ? allergies.join(', ') : 'None';
+    const kids = parseInt(r.kids) || 0;
     const guestInfo = [
       r.partner ? `+${r.partner}` : null,
-      r.kids > 0 ? `${r.kids} kid${r.kids > 1 ? 's' : ''}` : null
+      kids > 0 ? `${kids} kid${kids > 1 ? 's' : ''}` : null
     ].filter(Boolean).join(' · ');
+    const dish = r.dish || (r.potluck && r.potluck.dish) || '';
+    const category = r.category || (r.potluck && r.potluck.category) || '';
 
     html += `<div class="guest-card">
       <div class="guest-avatar">${initials}</div>
       <div>
-        <div class="guest-name">${r.name}${guestInfo ? ` <span style="font-size:12px;color:#888;font-weight:400">· ${guestInfo}</span>` : ''}</div>
-        <div class="guest-meta">🥗 ${r.diet} &nbsp;·&nbsp; ⚠️ ${allergyStr}</div>
+        <div class="guest-name">${name}${guestInfo ? ` <span style="font-size:12px;color:#888;font-weight:400">· ${guestInfo}</span>` : ''}</div>
+        <div class="guest-meta">🥗 ${r.diet || '—'} &nbsp;·&nbsp; ⚠️ ${allergyStr}</div>
       </div>
       <div class="guest-bringing">
-        ${r.potluck ? `🍳 ${r.potluck.dish}<br><span style="color:#aaa;font-weight:400">${r.potluck.category}</span>` : '<span style="color:#ccc">TBD</span>'}
+        ${dish ? `🍳 ${dish}<br><span style="color:#aaa;font-weight:400">${category}</span>` : '<span style="color:#ccc">TBD</span>'}
       </div>
     </div>`;
   });
